@@ -143,7 +143,9 @@ NOTES:
  *   Rating: 1
  */
 int bitXor(int x, int y) {
-  return 2;
+  // （not x and y） or （x and not y)
+  //        a       or        b      = not (not a and not b)
+  return ~(~(~x&y)&~(x&~y));
 }
 /* 
  * tmin - return minimum two's complement integer 
@@ -152,9 +154,8 @@ int bitXor(int x, int y) {
  *   Rating: 1
  */
 int tmin(void) {
-
-  return 2;
-
+  // Really?
+  return 1<<31;
 }
 //2
 /*
@@ -165,7 +166,9 @@ int tmin(void) {
  *   Rating: 1
  */
 int isTmax(int x) {
-  return 2;
+  int flag=x+1; // to filter out x = -1
+  int tmp=flag+x; // 111...1, i.e., -1
+  return !((!flag)|~tmp);
 }
 /* 
  * allOddBits - return 1 if all odd-numbered bits in word set to 1
@@ -176,7 +179,10 @@ int isTmax(int x) {
  *   Rating: 2
  */
 int allOddBits(int x) {
-  return 2;
+  // Note: even bits can also be 1
+  int mask=0xAA+(0xAA<<8);
+  mask=mask+(mask<<16);
+  return !(mask^(x&mask));
 }
 /* 
  * negate - return -x 
@@ -186,7 +192,7 @@ int allOddBits(int x) {
  *   Rating: 2
  */
 int negate(int x) {
-  return 2;
+  return (~x)+1; // easy! I handled it in 1s!
 }
 //3
 /* 
@@ -199,7 +205,12 @@ int negate(int x) {
  *   Rating: 3
  */
 int isAsciiDigit(int x) {
-  return 2;
+  int pos_flag=0x1<<31;
+  int ascii_min=0x30;
+  int ascii_max=0x39;
+  int flag1=(x+(~ascii_min)+1)&pos_flag; // supposed to be 0
+  int flag2=(ascii_max+(~x)+1)&pos_flag; // supposed to be 0
+  return (!flag1)&(!flag2);
 }
 /* 
  * conditional - same as x ? y : z 
@@ -209,7 +220,11 @@ int isAsciiDigit(int x) {
  *   Rating: 3
  */
 int conditional(int x, int y, int z) {
-  return 2;
+  // use x=!x to transform x to 0 or 1
+  x=!x;
+  // then (~x)+1 is all 0 or all 1 
+  x=(~x)+1;
+  return ((~x)&y)+(x&z);
 }
 /* 
  * isLessOrEqual - if x <= y  then return 1, else return 0 
@@ -219,7 +234,15 @@ int conditional(int x, int y, int z) {
  *   Rating: 3
  */
 int isLessOrEqual(int x, int y) {
-  return 2;
+  // cannot simply use y-x>=0
+  // must consider overflow!!
+  int pos_flag=0x1<<31;
+  int addX=(~x)+1+y; // y-x
+  int checkSign = addX&pos_flag;
+  int x_sign = x&pos_flag; // neg 10...0, pos 00...0
+  int y_sign = y&pos_flag;
+  int same_sign = !(x_sign^y_sign); // same 1, different 0
+  return (same_sign&(!checkSign)) | ((!same_sign)&(x_sign>>31)); //返回1有两种情况：符号相同标志位为0（相同）位与 y-x 的符号为0（y-x>=0）结果为1；符号相同标志位为1（不同）位与x的符号位为1（x<0）
 }
 //4
 /* 
@@ -231,7 +254,7 @@ int isLessOrEqual(int x, int y) {
  *   Rating: 4 
  */
 int logicalNeg(int x) {
-  return 2;
+  return ((x|((~x)+1))>>31)+1;
 }
 /* howManyBits - return the minimum number of bits required to represent x in
  *             two's complement
@@ -246,7 +269,25 @@ int logicalNeg(int x) {
  *  Rating: 4
  */
 int howManyBits(int x) {
-  return 0;
+  // n bit can represent 2^(n-1)-1
+  int b16,b8,b4,b2,b1,b0;
+  int sign=x>>31;
+  x = (sign&~x)|(~sign&x); //如果x为正则不变，否则按位取反（这样好找最高位为1的，原来是最高位为0的，这样也将符号位去掉了）
+
+  // 不断缩小范围
+  b16 = !!(x>>16)<<4; // 1 in left 16 bit?
+  x >>= b16; // if so, need at least 16 bit
+  b8 = !!(x>>8)<<3; // if 1 in left 16 bit, 1 in left 24 bit?
+  // if 1 not in left 16 bit, 1 in left 24 bit?
+  x >>= b8; // if so, need at least 16+8=24bit
+  b4 = !!(x>>4)<<2;
+  x >>= b4;
+  b2 = !!(x>>2)<<1;
+  x >>= b2;
+  b1 = !!(x>>1);
+  x >>= b1;
+  b0 = x;
+  return b16+b8+b4+b2+b1+b0+1; // sign bit need +1 bit
 }
 //float
 /* 
@@ -261,7 +302,15 @@ int howManyBits(int x) {
  *   Rating: 4
  */
 unsigned floatScale2(unsigned uf) {
-  return 2;
+  int sign = uf&(1<<31); // 32 bits
+  int exp = (uf&0x7f800000)>>23; // 8 bits
+  // 0x7f800000 is 0 11111111 00...0
+  if(exp==0) return uf<<1|sign; // 非规格化
+  if(exp==255) return uf; // 特殊值
+  ++exp; // ×2
+  if(exp==255) return 0x7f800000|sign; // 如果指数+1之后为指数为255则返回原符号无穷大，否则返回指数+1之后的原符号数。
+  return (exp<<23)|(uf&0x807fffff);
+  // 0x807fffff is 1 00000000 11...1
 }
 /* 
  * floatFloat2Int - Return bit-level equivalent of expression (int) f
@@ -276,7 +325,25 @@ unsigned floatScale2(unsigned uf) {
  *   Rating: 4
  */
 int floatFloat2Int(unsigned uf) {
-  return 2;
+  int sign_ = uf>>31; // 1 bit
+  int exp_  = ((uf&0x7f800000)>>23)-127; // 8 bits
+  int frac_ = (uf&0x007fffff)|0x00800000; // 23 bits
+
+  if(!(uf&0x7fffffff)) return 0; // all 0
+
+  if(exp_ > 31) return 0x80000000; // overflow
+  if(exp_ < 0) return 0; // <1, cutted
+
+  if(exp_ > 23) // 指数，就是 ×2 的多少次方，就是左移多少位，尾数的值是 1.xxxx，位模式是 xxxx，相当于已经左移了23位
+    frac_ <<= (exp_-23);
+  else
+    frac_ >>= (23-exp_);
+
+  if(!((frac_>>31)^sign_))
+    return frac_; // 和原符号相同则直接返回
+  if(frac_>>31) // 如果结果为负（原来为正）则溢出
+    return 0x80000000;
+  return ~frac_+1; // 原来为负，结果为正，则需要返回其补码（相反数）
 }
 /* 
  * floatPower2 - Return bit-level equivalent of the expression 2.0^x
@@ -292,5 +359,10 @@ int floatFloat2Int(unsigned uf) {
  *   Rating: 4
  */
 unsigned floatPower2(int x) {
-    return 2;
+  // 2^int, the frac part (low 23 bits) is always all 0
+  int INF = 0x7f800000; // 0x7f800000 = 0 11111111 00...0, INF
+  if(x < -(126+23)) return 0; // 小到无法用非规格数(denorm)表示
+  if(x < -126) return 1<<(149+x); // 用非规格数表示
+  if(x > 127) return INF;
+  return (x+127)<<23; //-127<=x<=127 用规格数表示
 }
