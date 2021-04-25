@@ -1,0 +1,1 @@
+/hex2raw < ./target1/touch2_hex.txt | ./ctarget -q
